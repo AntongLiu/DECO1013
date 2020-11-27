@@ -1,0 +1,111 @@
+import sys
+import time
+import music
+from microbit import *
+import neopixel
+
+_TIMEOUT1 = 1000
+_TIMEOUT2 = 10000
+
+
+class GroveUltrasonicRanger(object):
+    def __init__(self, pin):
+        self.dio = pin
+
+    def _get_distance(self):
+        self.dio.write_digital(0)
+        time.sleep_us(2)
+        self.dio.write_digital(1)
+        time.sleep_us(10)
+        self.dio.write_digital(0)
+        t0 = time.ticks_us()
+        count = 0
+        while count < _TIMEOUT1:
+            if self.dio.read_digital():
+                break
+            count += 1
+        if count >= _TIMEOUT1:
+            return None
+        t1 = time.ticks_us()
+        count = 0
+        while count < _TIMEOUT2:
+            if not self.dio.read_digital():
+                break
+            count += 1
+        if count >= _TIMEOUT2:
+            return None
+        t2 = time.ticks_us()
+        distance = ((t2 - t1) / 29.0 / 2.0)    # cm
+        return distance
+
+    def get_distance(self):
+        while True:
+            dist = self._get_distance()
+            if dist:
+                return dist
+
+
+def set_color(np, value):
+  #print(value)
+  for pixel_id in range(0, len(np)):
+    np[pixel_id] = value
+  np.show()
+
+
+if __name__ == "__main__":
+
+  sonar = GroveUltrasonicRanger(pin0)
+
+  np = neopixel.NeoPixel(pin2, 30)
+
+  result = 0
+  data = []
+  timeout = 0
+
+  while True:
+    try:
+      distanceValue = sonar.get_distance()
+      data.append(distanceValue)
+
+      if len(data) > 10:
+        result = 0
+        for tmp in data:
+          result += tmp
+        result = int(result / len(data))  # limit
+        data = []
+
+      if result > 100:  # lock [5, 100]
+        result = 100
+        timeout = 0
+
+      if result > 150:  # close
+        timeout = 0
+        set_color(np, (0, 0, 0))
+
+
+      elif result > 30:  # 50 -> 100 == 100 -> 5
+        tmp = (90 - result) * 2
+        value = (0, 50, 0)
+        timeout = 0
+        set_color(np, value)
+        display.show(Image.HAPPY)
+
+
+      elif result > 5:
+        print(timeout,result)
+        tmp = result * 2  # 5 -> 50 == 10 -> 100
+        value = (100 - tmp,(tmp + time.ticks_ms() // 100) % 100, 0)
+        # other
+        # music.play(music.NYAN, pin=microbit.pin1)
+        display.show(Image.SAD)
+        timeout += 1
+        if timeout > 500: #
+          timeout -= 200
+          music.play(music.JUMP_UP, pin=pin1)
+          #print(123,result)
+        set_color(np, value)
+      #print(1,result)
+
+    except Exception as e:
+      print(e)
+      pass
